@@ -52,4 +52,5 @@
  /home/evanjyli/sniper-7.4/common/config/config.hpp \
  /home/evanjyli/sniper-7.4/common/config/key.hpp \
  /home/evanjyli/sniper-7.4/common/config/section.hpp \
- /home/evanjyli/sniper-7.4/common/config/config_exceptions.hpp)
+ /home/evanjyli/sniper-7.4/common/config/config_exceptions.hpp \
+ /home/evanjyli/sniper-7.4/common/network/network_trace_logger.h)

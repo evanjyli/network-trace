@@ -1,4 +1,5 @@
 #include <string.h>
+#include <cstdio>
 
 #include "transport.h"
 #include "core.h"
@@ -10,6 +11,8 @@
 #include "subsecond_time.h"
 #include "performance_model.h"
 #include "instruction.h"
+
+#include "network_trace_logger.h"
 
 // FIXME: Rework netCreateBuf and netExPacket. We don't need to
 // duplicate the sender/receiver info the packet. This should be known
@@ -77,10 +80,13 @@ void Network::netPullFromTransport()
    do
    {
       LOG_PRINT("Entering netPullFromTransport");
+      // fprintf(stderr, "[NETWORK_TRACE] netPullFromTransport called on core %d\n", _core->getId());
 
       NetPacket packet(_transport->recv());
 
       LOG_PRINT("Pull packet : type %i, from %i, time %s", (SInt32)packet.type, packet.sender, itostr(packet.time).c_str());
+      // fprintf(stderr, "[NETWORK_TRACE] Pulled packet: type=%d, sender=%d, receiver=%d, length=%u on core %d\n",
+      //         packet.type, packet.sender, packet.receiver, packet.length, _core->getId());
       assert(0 <= packet.sender && packet.sender < _numMod);
       LOG_ASSERT_ERROR(0 <= packet.type && packet.type < NUM_PACKET_TYPES, "Packet type: %d not between 0 and %d", packet.type, NUM_PACKET_TYPES);
 
@@ -110,10 +116,20 @@ void Network::netPullFromTransport()
 
       if (callback != NULL)
       {
-         LOG_PRINT("Executing callback on packet : type %i, from %i, to %i, core_id %i, time %s",
-               (SInt32)packet.type, packet.sender, packet.receiver, _core->getId(), itostr(packet.time).c_str());
+         // LOG_PRINT("Executing callback on packet : type %i, from %i, to %i, core_id %i, time %s",
+         //       (SInt32)packet.type, packet.sender, packet.receiver, _core->getId(), itostr(packet.time).c_str());
+         // fprintf(stderr, "[NETWORK_TRACE] Using callback for packet type=%d, sender=%d, receiver=%d, length=%u\n",
+         //         packet.type, packet.sender, packet.receiver, packet.length);
          assert(0 <= packet.sender && packet.sender < _numMod);
          assert(0 <= packet.type && packet.type < NUM_PACKET_TYPES);
+
+         // --- Network trace logging for callback packets ---
+         SubsecondTime latency_time = packet.time - packet.start_time;
+         long latency_ns = latency_time.getNS();
+         // fprintf(stderr, "[NETWORK_TRACE] Callback packet: sender=%d, receiver=%d, length=%u, latency_ns=%ld\n", 
+         //         packet.sender, packet.receiver, packet.length, latency_ns);
+         NetworkTraceLogger::getInstance()->log(packet.sender, packet.receiver, packet.length, latency_ns);
+         // --- End network trace logging ---
 
          callback(_callbackObjs[packet.type], packet);
 
@@ -126,6 +142,17 @@ void Network::netPullFromTransport()
       {
          LOG_PRINT("Enqueuing packet : type %i, from %i, to %i, core_id %i, time %s.",
                (SInt32)packet.type, packet.sender, packet.receiver, _core->getId(), itostr(packet.time).c_str());
+         
+         // --- Network trace logging for enqueued packets ---
+         SubsecondTime latency_time = packet.time - packet.start_time;
+         long latency_ns = latency_time.getNS();
+         // fprintf(stderr, "[NETWORK_TRACE] Enqueuing packet: sender=%d, receiver=%d, length=%u, latency_ns=%ld\n", 
+         //         packet.sender, packet.receiver, packet.length, latency_ns);
+         // LOG_PRINT("Network trace (enqueue): sender=%d, receiver=%d, length=%u, latency_ns=%ld", 
+         //           packet.sender, packet.receiver, packet.length, latency_ns);
+         NetworkTraceLogger::getInstance()->log(packet.sender, packet.receiver, packet.length, latency_ns);
+         // --- End network trace logging ---
+         
          _netQueueLock.acquire();
          _netQueue.push_back(packet);
          _netQueueLock.release();
@@ -373,6 +400,16 @@ NetPacket Network::netRecv(const NetMatch &match, UInt64 timeout_ns)
    _netQueueLock.release();
 
    LOG_PRINT("packet.time(%s), start_time(%s)", itostr(packet.time).c_str(), itostr(start_time).c_str());
+
+   // --- Network trace logging ---
+   SubsecondTime latency_time = packet.time - start_time;
+   long latency_ns = latency_time.getNS();
+   // fprintf(stderr, "[NETWORK_TRACE] netRecv: sender=%d, receiver=%d, length=%u, latency_ns=%ld\n", 
+   //         packet.sender, packet.receiver, packet.length, latency_ns);
+   LOG_PRINT("Network trace: sender=%d, receiver=%d, length=%u, latency_ns=%ld", 
+             packet.sender, packet.receiver, packet.length, latency_ns);
+   NetworkTraceLogger::getInstance()->log(packet.sender, packet.receiver, packet.length, latency_ns);
+   // --- End network trace logging ---
 
    if (packet.time > start_time)
    {

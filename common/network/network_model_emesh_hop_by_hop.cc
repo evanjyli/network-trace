@@ -9,6 +9,7 @@
 #include "dvfs_manager.h"
 #include "stats.h"
 #include "config.hpp"
+#include "network_trace_logger.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -131,9 +132,15 @@ NetworkModelEMeshHopByHop::routePacket(const NetPacket &pkt, std::vector<Hop> &n
    UInt32 pkt_length = getNetwork()->getModeledLength(pkt);
 
    LOG_PRINT("pkt length(%u)", pkt_length);
+   
+   // Print every packet being routed
+   fprintf(stderr, "[ROUTE] Core %d routing: pkt.sender=%d, pkt.receiver=%d, requester=%d, pkt.type=%d\n",
+           m_core_id, pkt.sender, pkt.receiver, requester, pkt.type);
 
    if (pkt.sender == m_core_id)
    {
+      fprintf(stderr, "[ORIGINATE] Core %d ORIGINATING packet: sender=%d, receiver=%d, requester=%d, length=%u\n",
+              m_core_id, pkt.sender, pkt.receiver, requester, pkt_length);
       m_total_packets_sent ++;
       m_total_bytes_sent += pkt_length;
    }
@@ -240,7 +247,11 @@ NetworkModelEMeshHopByHop::processReceivedPacket(NetPacket& pkt)
 
    if ( (!m_enabled) || (requester >= (core_id_t) Config::getSingleton()->getApplicationCores())
                      || (m_core_id >= (core_id_t) Config::getSingleton()->getApplicationCores()))
+   {
+      fprintf(stderr, "[MESH_TRACE] SKIPPED: Core %d, enabled=%d, requester=%d, sender=%d, receiver=%d, app_cores=%d\n",
+              m_core_id, m_enabled, requester, pkt.sender, pkt.receiver, Config::getSingleton()->getApplicationCores());
       return;
+   }
 
    SubsecondTime packet_latency = pkt.time - pkt.start_time;
    SubsecondTime contention_delay = packet_latency - (computeDistance(pkt.sender, m_core_id) * m_hop_latency.getLatency());
@@ -260,6 +271,10 @@ NetworkModelEMeshHopByHop::processReceivedPacket(NetPacket& pkt)
    m_total_bytes_received += pkt_length;
    m_total_packet_latency += packet_latency;
    m_total_contention_delay += contention_delay;
+
+   // Logging is now done in addHop() for each individual hop
+   fprintf(stderr, "[RECV] Core %d final receive from original sender=%d, requester=%d, length=%u, latency=%ld ns\n",
+           m_core_id, pkt.sender, requester, pkt_length, packet_latency.getNS());
 }
 
 void
@@ -279,6 +294,16 @@ NetworkModelEMeshHopByHop::addHop(OutputDirection direction,
       h.time = pkt_time + computeLatency(direction, pkt_time, pkt_length, requester, queue_delay_stats);
 
    nextHops.push_back(h);
+   
+   // Log each hop: from current core (m_core_id) to next_dest
+   // Calculate hop latency
+   SubsecondTime hop_latency = SubsecondTime::Zero();
+   if (direction <= NUM_OUTPUT_DIRECTIONS)
+      hop_latency = computeLatency(direction, pkt_time, pkt_length, requester, queue_delay_stats);
+   
+   fprintf(stderr, "[HOP_TRACE] Router at core %d: forwarding to next_dest=%d (final_dest=%d, direction=%s, length=%u, hop_latency=%ld ns)\n",
+           m_core_id, next_dest, final_dest, OutputDirectionString(direction), pkt_length, hop_latency.getNS());
+   NetworkTraceLogger::getInstance()->log(m_core_id, next_dest, pkt_length, hop_latency.getNS());
 }
 
 SInt32
@@ -332,7 +357,8 @@ NetworkModelEMeshHopByHop::computeLatency(OutputDirection direction, SubsecondTi
          *queue_delay_stats += queue_delay;
    }
 
-   LOG_PRINT("Queue Delay(%s), Hop Latency(%s)", itostr(queue_delay).c_str(), itostr(m_hop_latency.getLatency()).c_str());
+   LOG_PRINT("Queue Delay(%s), Hop Latency(%s), Direction(%d), Requester(%d)",
+             itostr(queue_delay).c_str(), itostr(m_hop_latency.getLatency()).c_str(), direction, requester);
    SubsecondTime packet_latency = m_hop_latency.getLatency() + queue_delay;
 
    return packet_latency;

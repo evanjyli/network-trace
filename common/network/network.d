@@ -41,4 +41,5 @@
  /home/evanjyli/sniper-7.4/common/system/core_manager.h \
  /home/evanjyli/sniper-7.4/common/misc/tls.h \
  /home/evanjyli/sniper-7.4/common/performance_model/instruction.h \
- /home/evanjyli/sniper-7.4/common/performance_model/operand.h)
+ /home/evanjyli/sniper-7.4/common/performance_model/operand.h \
+ /home/evanjyli/sniper-7.4/common/network/network_trace_logger.h)

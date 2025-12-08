@@ -55,4 +55,11 @@ RUN apt-get update && apt-get install -y \
     git \
     g++-9 \
     vim \
+    xsltproc \
+    gettext \
+    libx11-dev \
+    libxext-dev \
+    libxt-dev \
+    libxmu-dev \
+    libxi-dev \
  && rm -rf /var/lib/apt/lists/*
