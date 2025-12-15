@@ -151,7 +151,7 @@ NetworkModelEMeshHopByHop::routePacket(const NetPacket &pkt, std::vector<Hop> &n
       {
          for (core_id_t i = 0; i < (core_id_t) Config::getSingleton()->getTotalCores(); i++)
          {
-            addHop(DESTINATION, i, i, pkt.time, pkt_length, nextHops, requester);
+            addHop(DESTINATION, i, i, pkt.time, pkt_length, nextHops, requester, NULL, pkt.start_time);
          }
       }
       else if (m_broadcast_tree_enabled)
@@ -170,17 +170,17 @@ NetworkModelEMeshHopByHop::routePacket(const NetPacket &pkt, std::vector<Hop> &n
          computePosition(m_core_id, cx, cy);
 
          if (cy >= sy)
-            addHop(UP, NetPacket::BROADCAST, computeCoreId(cx,cy+1), curr_time, pkt_length, nextHops, requester);
+            addHop(UP, NetPacket::BROADCAST, computeCoreId(cx,cy+1), curr_time, pkt_length, nextHops, requester, NULL, pkt.start_time);
          if (cy <= sy)
-            addHop(DOWN, NetPacket::BROADCAST, computeCoreId(cx,cy-1), curr_time, pkt_length, nextHops, requester);
+            addHop(DOWN, NetPacket::BROADCAST, computeCoreId(cx,cy-1), curr_time, pkt_length, nextHops, requester, NULL, pkt.start_time);
          if (cy == sy)
          {
             if (cx >= sx)
-               addHop(RIGHT, NetPacket::BROADCAST, computeCoreId(cx+1,cy), curr_time, pkt_length, nextHops, requester);
+               addHop(RIGHT, NetPacket::BROADCAST, computeCoreId(cx+1,cy), curr_time, pkt_length, nextHops, requester, NULL, pkt.start_time);
             if (cx <= sx)
-               addHop(LEFT, NetPacket::BROADCAST, computeCoreId(cx-1,cy), curr_time, pkt_length, nextHops, requester);
+               addHop(LEFT, NetPacket::BROADCAST, computeCoreId(cx-1,cy), curr_time, pkt_length, nextHops, requester, NULL, pkt.start_time);
             if (cx == sx)
-               addHop(SELF, m_core_id, m_core_id, curr_time, pkt_length, nextHops, requester);
+               addHop(SELF, m_core_id, m_core_id, curr_time, pkt_length, nextHops, requester, NULL, pkt.start_time);
          }
       }
       else
@@ -201,13 +201,13 @@ NetworkModelEMeshHopByHop::routePacket(const NetPacket &pkt, std::vector<Hop> &n
             OutputDirection direction;
             core_id_t next_dest = getNextDest(i, direction);
 
-            addHop(direction, i, next_dest, curr_time, pkt_length, nextHops, requester);
+            addHop(direction, i, next_dest, curr_time, pkt_length, nextHops, requester, NULL, pkt.start_time);
          }
       }
    }
    else if (m_fake_node)
    {
-      addHop(DESTINATION, pkt.receiver, pkt.receiver, pkt.time, pkt_length, nextHops, requester);
+      addHop(DESTINATION, pkt.receiver, pkt.receiver, pkt.time, pkt_length, nextHops, requester, NULL, pkt.start_time);
    }
    else
    {
@@ -224,7 +224,7 @@ NetworkModelEMeshHopByHop::routePacket(const NetPacket &pkt, std::vector<Hop> &n
       OutputDirection direction;
       core_id_t next_dest = getNextDest(pkt.receiver, direction);
 
-      addHop(direction, pkt.receiver, next_dest, curr_time, pkt_length, nextHops, requester, (subsecond_time_t*)&pkt.queue_delay);
+      addHop(direction, pkt.receiver, next_dest, curr_time, pkt_length, nextHops, requester, (subsecond_time_t*)&pkt.queue_delay, pkt.start_time);
    }
 }
 
@@ -282,7 +282,8 @@ NetworkModelEMeshHopByHop::addHop(OutputDirection direction,
       core_id_t final_dest, core_id_t next_dest,
       SubsecondTime pkt_time, UInt32 pkt_length,
       std::vector<Hop>& nextHops, core_id_t requester,
-      subsecond_time_t *queue_delay_stats)
+      subsecond_time_t *queue_delay_stats,
+      SubsecondTime start_time)
 {
    Hop h;
    h.final_dest = final_dest;
@@ -300,8 +301,8 @@ NetworkModelEMeshHopByHop::addHop(OutputDirection direction,
    SubsecondTime hop_latency = SubsecondTime::Zero();
    if (direction <= NUM_OUTPUT_DIRECTIONS)
       hop_latency = computeLatency(direction, pkt_time, pkt_length, requester, queue_delay_stats);
-   
-   fprintf(stderr, "[HOP_TRACE] Router at core %d: forwarding to next_dest=%d (final_dest=%d, direction=%s, length=%u, hop_latency=%ld ns)\n",
+
+   fprintf(stderr, "[HOP_TRACE] Router at core %d: forwarding to next_dest=%d (final_dest=%d, direction=%s, length=%u, hop_latency=%ld cycles)\n",
            m_core_id, next_dest, final_dest, OutputDirectionString(direction), pkt_length, hop_latency.getNS());
    NetworkTraceLogger::getInstance()->log(m_core_id, next_dest, pkt_length, hop_latency.getNS());
 }

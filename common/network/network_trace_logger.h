@@ -7,7 +7,7 @@
 class NetworkTraceLogger {
 public:
     static NetworkTraceLogger* getInstance() {
-        static NetworkTraceLogger instance("network_trace.log");
+        static NetworkTraceLogger instance("/home/evanjyli/sniper-7.4/output/network_trace.log");
         return &instance;
     }
     
